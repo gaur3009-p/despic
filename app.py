@@ -2,8 +2,10 @@ import gradio as gr
 
 from services.asr import transcribe
 from services.translate import translate
+from services.tts_client import speak
 
 
+# Supported target languages
 languages = {
     "English": "eng_Latn",
     "Hindi": "hin_Deva",
@@ -15,26 +17,50 @@ languages = {
 def process(audio, lang):
 
     if audio is None:
-        return "Please record audio", ""
+        return "Please record audio", "", None
 
-    text = transcribe(audio)
+    try:
 
-    translated = translate(text, languages[lang])
+        # Speech → Text
+        text = transcribe(audio)
 
-    return text, translated
+        # Translate text
+        translated = translate(text, languages[lang])
+
+        # Call TTS microservice
+        audio_file = speak(translated)
+
+        return text, translated, audio_file
+
+    except Exception as e:
+
+        return f"Error: {str(e)}", "", None
 
 
 ui = gr.Interface(
     fn=process,
+
     inputs=[
-        gr.Audio(type="filepath", sources=["microphone"]),
-        gr.Dropdown(list(languages.keys()), label="Target Language")
+        gr.Audio(
+            sources=["microphone"],
+            type="filepath",
+            label="Speak"
+        ),
+        gr.Dropdown(
+            list(languages.keys()),
+            label="Target Language"
+        )
     ],
+
     outputs=[
         gr.Textbox(label="Original Text"),
-        gr.Textbox(label="Translated Text")
+        gr.Textbox(label="Translated Text"),
+        gr.Audio(label="Translated Speech")
     ],
-    title="Phase 1 – Speech Translator"
+
+    title="Phase 2 – Multilingual Speech Translator"
 )
 
-ui.launch(share = True)
+
+if __name__ == "__main__":
+    ui.launch(share = True)
