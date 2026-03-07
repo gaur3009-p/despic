@@ -1,0 +1,24 @@
+from fastapi import FastAPI
+from pydantic import BaseModel
+from TTS.api import TTS
+import uuid
+
+app = FastAPI()
+
+tts = TTS("tts_models/en/ljspeech/tacotron2-DDC")
+
+class TTSRequest(BaseModel):
+    text: str
+
+@app.post("/generate")
+
+def generate_speech(req: TTSRequest):
+
+    file = f"output_{uuid.uuid4()}.wav"
+
+    tts.tts_to_file(
+        text=req.text,
+        file_path=file
+    )
+
+    return {"audio_file": file}
