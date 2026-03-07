@@ -1,0 +1,6 @@
+gradio
+faster-whisper
+torch
+transformers
+sentencepiece
+accelerate
