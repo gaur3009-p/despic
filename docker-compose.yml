@@ -1,0 +1,15 @@
+version: "3.9"
+
+services:
+
+  tts:
+    build: ./tts_service
+    ports:
+      - "8001:8001"
+
+  app:
+    build: .
+    ports:
+      - "7860:7860"
+    depends_on:
+      - tts
