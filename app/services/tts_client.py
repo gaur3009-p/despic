@@ -1,6 +1,6 @@
 import requests
 
-TTS_URL = "http://localhost:8001/generate"
+TTS_URL = "http://127.0.0.1:8001/generate"
 
 def speak(text):
 
