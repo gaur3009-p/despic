@@ -14,7 +14,7 @@ class TTSRequest(BaseModel):
 
 def generate_speech(req: TTSRequest):
 
-    file = f"output_{uuid.uuid4()}.wav"
+    file = f"/content/despic/tts_service/output_{uuid.uuid4()}.wav"
 
     tts.tts_to_file(
         text=req.text,
