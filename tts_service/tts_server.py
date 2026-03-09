@@ -5,7 +5,7 @@ import uuid
 
 app = FastAPI()
 
-tts = TTS("tts_models/en/ljspeech/tacotron2-DDC")
+tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2")
 
 class TTSRequest(BaseModel):
     text: str
