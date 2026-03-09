@@ -2,8 +2,7 @@ import gradio as gr
 
 from services.asr import transcribe
 from services.translate import translate
-from services.tts_client import speak
-
+from services.tts import generate_speech
 
 # Supported target languages
 languages = {
@@ -28,7 +27,7 @@ def process(audio, lang):
         translated = translate(text, languages[lang])
 
         # Call TTS microservice
-        audio_file = speak(translated)
+        audio_file = generate_speech(translated)
 
         return text, translated, audio_file
 
