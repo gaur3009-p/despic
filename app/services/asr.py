@@ -4,7 +4,7 @@ import torch
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 model = WhisperModel(
-    "base",
+    "medium",
     device=device,
     compute_type="float16" if device == "cuda" else "int8"
 )
