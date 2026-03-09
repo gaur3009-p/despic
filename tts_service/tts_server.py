@@ -18,7 +18,8 @@ def generate_speech(req: TTSRequest):
 
     tts.tts_to_file(
         text=req.text,
-        file_path=file
+        file_path=file,
+        language="hi"
     )
 
     return {"audio_file": file}
