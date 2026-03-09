@@ -4,3 +4,5 @@ torch
 transformers
 sentencepiece
 accelerate
+git+https://github.com/huggingface/parler-tts.git
+soundfile
