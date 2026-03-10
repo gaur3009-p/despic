@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Realtime Translator</title>
+</head>
+
+<body>
+
+<button onclick="start()">Start Conversation</button>
+
+<script>
+
+async function start(){
+
+const stream = await navigator.mediaDevices.getUserMedia({audio:true})
+
+const pc = new RTCPeerConnection()
+
+stream.getTracks().forEach(track => pc.addTrack(track, stream))
+
+const offer = await pc.createOffer()
+
+await pc.setLocalDescription(offer)
+
+const response = await fetch("/offer", {
+method:"POST",
+body:JSON.stringify(offer),
+headers:{"Content-Type":"application/json"}
+})
+
+const answer = await response.json()
+
+await pc.setRemoteDescription(answer)
+
+}
+
+</script>
+
+</body>
+</html>
