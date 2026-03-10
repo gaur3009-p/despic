@@ -3,7 +3,6 @@ import time
 import gradio as gr
 import requests
 
-
 SERVER_PORT = 7860
 
 
@@ -15,27 +14,28 @@ def start_server():
 
     time.sleep(5)
 
-    return f"WebRTC server started on port {SERVER_PORT}"
+    return "WebRTC server started."
 
 
-def open_meeting():
+def meeting_page():
 
-    return f"http://localhost:{SERVER_PORT}"
+    try:
+        r = requests.get(f"http://localhost:{SERVER_PORT}")
+        return r.text
+    except:
+        return "<h2>Server not running yet</h2>"
 
 
 with gr.Blocks() as demo:
 
-    gr.Markdown("# Real-Time Multilingual Conversation (Phase 3)")
+    gr.Markdown("# Phase-3 Realtime Multilingual Conversation")
 
     start_btn = gr.Button("Start WebRTC Server")
 
-    status = gr.Textbox(label="Server Status")
-
-    link_box = gr.Textbox(label="Meeting URL")
+    status = gr.Textbox()
 
     start_btn.click(start_server, outputs=status)
 
-    start_btn.click(open_meeting, outputs=link_box)
-
+    gr.HTML(meeting_page)
 
 demo.launch(share=True)
