@@ -1,29 +1,32 @@
 import subprocess
 import time
-import gradio as gr
 import requests
+import gradio as gr
 
 SERVER_PORT = 7860
+server_process = None
 
 
 def start_server():
+    global server_process
 
-    subprocess.Popen(
-        ["python", "despic/app/realtime/webrtc_server.py"]
-    )
+    if server_process is None:
+        server_process = subprocess.Popen(
+            ["python", "app/realtime/webrtc_server.py"]
+        )
 
-    time.sleep(5)
+        time.sleep(5)
 
-    return "WebRTC server started."
+    return "WebRTC server started on port 7860"
 
 
-def meeting_page():
+def load_meeting_page():
 
     try:
         r = requests.get(f"http://localhost:{SERVER_PORT}")
         return r.text
     except:
-        return "<h2>Server not running yet</h2>"
+        return "<h3>Server not ready yet. Click 'Start WebRTC Server' first.</h3>"
 
 
 with gr.Blocks() as demo:
@@ -32,10 +35,11 @@ with gr.Blocks() as demo:
 
     start_btn = gr.Button("Start WebRTC Server")
 
-    status = gr.Textbox()
+    status = gr.Textbox(label="Server Status")
+
+    meeting_ui = gr.HTML()
 
     start_btn.click(start_server, outputs=status)
-
-    gr.HTML(meeting_page)
+    start_btn.click(load_meeting_page, outputs=meeting_ui)
 
 demo.launch(share=True)
