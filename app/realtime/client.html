@@ -1,20 +1,25 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-<title>Realtime Translator</title>
+<title>Realtime Audio Translator</title>
 </head>
 
 <body>
+
+<h2>Real-Time Multilingual Conversation</h2>
 
 <button onclick="start()">Start Conversation</button>
 
 <script>
 
+let pc;
+
 async function start(){
 
 const stream = await navigator.mediaDevices.getUserMedia({audio:true})
 
-const pc = new RTCPeerConnection()
+pc = new RTCPeerConnection()
 
 stream.getTracks().forEach(track => pc.addTrack(track, stream))
 
@@ -22,10 +27,13 @@ const offer = await pc.createOffer()
 
 await pc.setLocalDescription(offer)
 
-const response = await fetch("/offer", {
+const response = await fetch("/offer",{
 method:"POST",
-body:JSON.stringify(offer),
-headers:{"Content-Type":"application/json"}
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({
+sdp: pc.localDescription.sdp,
+type: pc.localDescription.type
+})
 })
 
 const answer = await response.json()
