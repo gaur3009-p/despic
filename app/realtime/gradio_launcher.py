@@ -9,7 +9,7 @@ SERVER_PORT = 7860
 def start_server():
 
     subprocess.Popen(
-        ["python", "app/realtime/webrtc_server.py"]
+        ["python", "app/despic/realtime/webrtc_server.py"]
     )
 
     time.sleep(5)
