@@ -28,11 +28,10 @@ languages = {
 }
 
 
-
-def realtime_translate(audio, target_lang):
+def realtime_pipeline(audio, target_lang):
 
     if audio is None:
-        return None
+        return "", "", None
 
     sr, data = audio
 
@@ -40,37 +39,56 @@ def realtime_translate(audio, target_lang):
 
     sf.write(temp.name, data, sr)
 
+    # ASR
     text = transcribe(temp.name)
 
+    # Translation
     translated = translate(text, languages[target_lang])
 
+    # TTS
     speech = generate_speech(translated)
 
-    return speech
+    return text, translated, speech
 
 
 with gr.Blocks() as demo:
 
-    gr.Markdown("# 🎙 Real-Time Multilingual Conversation")
+    gr.Markdown("# 🎙 Real-Time Multilingual Conversation (Phase 3)")
 
-    lang = gr.Dropdown(
-        list(languages.keys()),
-        value="Hindi",
-        label="Target Language"
-    )
+    with gr.Row():
+
+        target_lang = gr.Dropdown(
+            list(languages.keys()),
+            value="Hindi",
+            label="Target Language"
+        )
 
     mic = gr.Audio(
         sources=["microphone"],
         streaming=True,
-        type="numpy"
+        type="numpy",
+        label="Speak"
     )
 
-    output_audio = gr.Audio()
+    with gr.Row():
+
+        original_text = gr.Textbox(
+            label="Original Speech (ASR)",
+            lines=4
+        )
+
+        translated_text = gr.Textbox(
+            label="Translated Text",
+            lines=4
+        )
+
+    translated_audio = gr.Audio(label="Translated Speech")
 
     mic.stream(
-        realtime_translate,
-        inputs=[mic, lang],
-        outputs=output_audio
+        realtime_pipeline,
+        inputs=[mic, target_lang],
+        outputs=[original_text, translated_text, translated_audio]
     )
+
 
 demo.launch(share=True)
