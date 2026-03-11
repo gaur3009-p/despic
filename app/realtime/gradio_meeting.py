@@ -3,9 +3,9 @@ import numpy as np
 import soundfile as sf
 import tempfile
 
-from services.asr import transcribe
-from services.translate import translate
-from services.tts import generate_speech
+from app.services.asr import transcribe
+from app.services.translate import translate
+from app.services.tts import generate_speech
 
 
 languages = {
