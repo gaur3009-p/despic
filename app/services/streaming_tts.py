@@ -20,9 +20,7 @@ description_tokenizer = AutoTokenizer.from_pretrained(
 
 def generate_streaming_speech(text):
 
-    description = (
-        "Divya speaks clearly with a natural conversational tone."
-    )
+    description = "Divya speaks clearly with a natural conversational tone."
 
     description_inputs = description_tokenizer(
         description,
@@ -38,12 +36,13 @@ def generate_streaming_speech(text):
         input_ids=description_inputs.input_ids,
         attention_mask=description_inputs.attention_mask,
         prompt_input_ids=prompt_inputs.input_ids,
-        prompt_attention_mask=prompt_inputs.attention_mask
+        prompt_attention_mask=prompt_inputs.attention_mask,
+        do_sample=True
     )
 
     audio = generation.cpu().numpy().squeeze()
 
-    file = f"stream_{uuid.uuid4()}.wav"
+    file = f"speech_{uuid.uuid4()}.wav"
 
     sf.write(file, audio, model.config.sampling_rate)
 
