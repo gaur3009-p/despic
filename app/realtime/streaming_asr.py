@@ -6,7 +6,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 model = WhisperModel(
     "medium",
     device=device,
-    compute_type="float16"
+    compute_type="float16" if device == "cuda" else "int8"
 )
 
 
@@ -20,8 +20,8 @@ class StreamingASR:
 
         segments, info = model.transcribe(
             audio_path,
-            beam_size=3,
-            best_of=3,
+            beam_size=1,
+            best_of=1,
             condition_on_previous_text=False
         )
 
