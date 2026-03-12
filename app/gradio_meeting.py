@@ -1,22 +1,20 @@
 import gradio as gr
 import tempfile
 import soundfile as sf
+import librosa
 
 from realtime.vad import get_speech_segments
 from realtime.audio_buffer import AudioBuffer
 from realtime.streaming_asr import StreamingASR
-
 from services.streaming_translate import translate_chunk
+
 from services.streaming_tts import generate_streaming_speech
 
 
-# Initialize ASR engine
 asr_engine = StreamingASR()
 
-# Audio buffer
 audio_buffer = None
 
-# Conversation logs
 transcript_log = []
 translation_log = []
 
@@ -52,20 +50,21 @@ def realtime_pipeline(audio, target_lang):
 
     sr, data = audio
 
-    # Initialize buffer
-    if audio_buffer is None:
-        audio_buffer = AudioBuffer(sr)
+    # resample for VAD + Whisper
+    if sr != 16000:
+        data = librosa.resample(data.astype(float), orig_sr=sr, target_sr=16000)
+        sr = 16000
 
-    # Append new audio chunk
+    if audio_buffer is None:
+        audio_buffer = AudioBuffer(sr, buffer_seconds=1)
+
     audio_buffer.append(data)
 
-    # Wait until enough audio collected
     if not audio_buffer.ready():
         return "\n".join(transcript_log), "\n".join(translation_log), None
 
     buffer_audio = audio_buffer.get_buffer()
 
-    # Detect speech using VAD
     speech_segments = get_speech_segments(buffer_audio, sr)
 
     if len(speech_segments) == 0:
@@ -75,27 +74,19 @@ def realtime_pipeline(audio, target_lang):
 
     speech_audio = buffer_audio[segment["start"]:segment["end"]]
 
-    # Remove processed audio
     audio_buffer.trim(segment["end"])
 
-    # Save speech chunk
     temp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
 
     sf.write(temp.name, speech_audio, sr)
 
-    # Streaming ASR
     text, source_lang = asr_engine.transcribe(temp.name)
 
     if text is None or text.strip() == "":
         return "\n".join(transcript_log), "\n".join(translation_log), None
 
-    # Prevent duplicates
-    if len(transcript_log) > 0 and text == transcript_log[-1]:
-        return "\n".join(transcript_log), "\n".join(translation_log), None
-
     transcript_log.append(text)
 
-    # Translation
     translated = translate_chunk(
         text,
         source_lang,
@@ -104,7 +95,6 @@ def realtime_pipeline(audio, target_lang):
 
     translation_log.append(translated)
 
-    # Streaming TTS
     speech = generate_streaming_speech(translated)
 
     return "\n".join(transcript_log), "\n".join(translation_log), speech
@@ -118,15 +108,10 @@ def clear_conversation():
 
     transcript_log.clear()
     translation_log.clear()
-
     audio_buffer = None
 
     return "", "", None
 
-
-# ==========================
-# Gradio UI
-# ==========================
 
 with gr.Blocks() as demo:
 
@@ -141,8 +126,7 @@ with gr.Blocks() as demo:
     mic = gr.Audio(
         sources=["microphone"],
         streaming=True,
-        type="numpy",
-        label="Speak (Auto Translate + Dub)"
+        type="numpy"
     )
 
     with gr.Row():
@@ -157,9 +141,7 @@ with gr.Blocks() as demo:
             lines=12
         )
 
-    translated_audio = gr.Audio(
-        label="Dubbed Translation"
-    )
+    translated_audio = gr.Audio()
 
     clear_btn = gr.Button("Clear Conversation")
 
@@ -173,6 +155,5 @@ with gr.Blocks() as demo:
         clear_conversation,
         outputs=[original_text, translated_text, translated_audio]
     )
-
 
 demo.launch(share=True)
