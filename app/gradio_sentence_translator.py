@@ -1,6 +1,5 @@
 import gradio as gr
-from pipelines.streaming_pipeline import run_pipeline
-
+from pipelines.sentence_pipeline import run_travel_pipeline
 
 languages = {
     "English": "eng_Latn",
@@ -21,7 +20,6 @@ languages = {
     "Sanskrit": "san_Deva"
 }
 
-
 def translate_sentence(audio, target):
 
     if audio is None:
@@ -29,16 +27,17 @@ def translate_sentence(audio, target):
 
     sr, data = audio
 
-    return run_pipeline(data, sr, target)
+    return run_travel_pipeline(data, sr, target)
 
 
 with gr.Blocks() as demo:
 
     gr.Markdown("# Travel Speech Translator")
 
-    target = gr.Dropdown( 
-      list(languages.keys()), 
-      value="Hindi" )
+    target = gr.Dropdown(
+        language = list(language.keys()),
+        value="Hindi"
+    )
 
     mic = gr.Audio(
         sources=["microphone"],
@@ -58,4 +57,4 @@ with gr.Blocks() as demo:
         outputs=[transcript, translation, audio_out]
     )
 
-demo.launch(share = True)
+demo.launch()
