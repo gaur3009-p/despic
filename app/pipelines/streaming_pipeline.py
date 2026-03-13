@@ -26,8 +26,16 @@ languages = {
     "Sanskrit": "san_Deva"
 }
 
-
 def run_pipeline(audio, sr, target_lang):
+
+    # ---- FIX 1: convert stereo to mono ----
+    if len(audio.shape) > 1:
+        audio = np.mean(audio, axis=1)
+
+    # ---- FIX 2: resample for VAD ----
+    if sr != 16000:
+        audio = librosa.resample(audio.astype(float), orig_sr=sr, target_sr=16000)
+        sr = 16000
 
     speech_segments = detect_speech(audio, sr)
 
