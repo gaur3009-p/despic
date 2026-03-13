@@ -4,19 +4,24 @@ import torch
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 model = WhisperModel(
-    "medium",
+    "small",
     device=device,
     compute_type="float16" if device == "cuda" else "int8"
 )
 
+
 def transcribe(audio_path):
 
-    segments, _ = model.transcribe(
+    segments, info = model.transcribe(
         audio_path,
-        beam_size=5,
-        vad_filter=True
+        beam_size=1,
+        best_of=1,
+        condition_on_previous_text=False
     )
 
-    text = " ".join(segment.text for segment in segments)
+    text = ""
 
-    return text.strip()
+    for seg in segments:
+        text += seg.text
+
+    return text.strip(), info.language
