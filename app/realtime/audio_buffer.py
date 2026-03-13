@@ -3,32 +3,26 @@ import numpy as np
 
 class AudioBuffer:
 
-    def __init__(self, sample_rate, buffer_seconds=1):
+    def __init__(self, sr, seconds=3):
 
-        self.sample_rate = sample_rate
-        self.buffer_samples = sample_rate * buffer_seconds
+        self.sr = sr
+        self.max_samples = sr * seconds
         self.buffer = np.array([])
 
-        self.MAX_BUFFER = sample_rate * 10
-
-    def append(self, audio_chunk):
+    def append(self, data):
 
         if self.buffer.size == 0:
-            self.buffer = audio_chunk
+            self.buffer = data
         else:
-            self.buffer = np.concatenate([self.buffer, audio_chunk])
+            self.buffer = np.concatenate([self.buffer, data])
 
-        if len(self.buffer) > self.MAX_BUFFER:
-            self.buffer = self.buffer[-self.MAX_BUFFER:]
+        if len(self.buffer) > self.max_samples:
+            self.buffer = self.buffer[-self.max_samples:]
 
-    def ready(self):
-
-        return len(self.buffer) >= self.buffer_samples
-
-    def get_buffer(self):
+    def get(self):
 
         return self.buffer
 
-    def trim(self, end_index):
+    def clear(self):
 
-        self.buffer = self.buffer[end_index:]
+        self.buffer = np.array([])
