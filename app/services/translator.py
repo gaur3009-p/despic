@@ -3,38 +3,24 @@ import torch
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-model_name = "ai4bharat/indictrans2-en-indic-dist-200M"
+model_name = "facebook/nllb-200-distilled-600M"
 
-# IMPORTANT: trust_remote_code=True
-tokenizer = AutoTokenizer.from_pretrained(
-    model_name,
-    trust_remote_code=True
-)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-model = AutoModelForSeq2SeqLM.from_pretrained(
-    model_name,
-    trust_remote_code=True
-).to(device)
+model = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(device)
 
 
-def translate(text, src_lang, tgt_lang):
+def translate(text, src, tgt):
 
-    inputs = tokenizer(
-        text,
-        src_lang=src_lang,
-        tgt_lang=tgt_lang,
-        return_tensors="pt"
-    ).to(device)
+    tokenizer.src_lang = src
 
-    outputs = model.generate(
+    inputs = tokenizer(text, return_tensors="pt").to(device)
+
+    tgt_id = tokenizer.convert_tokens_to_ids(tgt)
+
+    tokens = model.generate(
         **inputs,
-        max_length=128,
-        num_beams=1
+        forced_bos_token_id=tgt_id,
+        max_length=200
     )
-
-    translated = tokenizer.decode(
-        outputs[0],
-        skip_special_tokens=True
-    )
-
-    return translated
+    return tokenizer.decode(tokens[0], skip_special_tokens=True)
