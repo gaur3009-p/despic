@@ -3,7 +3,7 @@ import torch
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-model_name = "facebook/nllb-200-distilled-600M"
+model_name = "ai4bharat/indictrans2-en-indic-dist-200M"
 
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
