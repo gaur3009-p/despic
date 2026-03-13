@@ -1,0 +1,51 @@
+import tempfile
+import soundfile as sf
+import librosa
+import numpy as np
+
+from realtime.vad import detect_speech
+from services.asr_travel import transcribe_travel
+from services.translator import translate
+from services.tts_engine import speak
+
+
+languages = {
+    "English": "eng_Latn",
+    "Hindi": "hin_Deva",
+    "Tamil": "tam_Taml",
+    "Telugu": "tel_Telu"
+}
+
+
+def run_travel_pipeline(audio, sr, target_lang):
+
+    if len(audio.shape) > 1:
+        audio = np.mean(audio, axis=1)
+
+    if sr != 16000:
+        audio = librosa.resample(audio.astype(float), orig_sr=sr, target_sr=16000)
+        sr = 16000
+
+    speech_segments = detect_speech(audio, sr)
+
+    if len(speech_segments) == 0:
+        return "", "", None
+
+    segment = speech_segments[0]
+
+    speech_audio = audio[segment["start"]:segment["end"]]
+
+    temp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+
+    sf.write(temp.name, speech_audio, sr)
+
+    text, src_lang = transcribe_travel(temp.name)
+
+    if text == "":
+        return "", "", None
+
+    translated = translate(text, src_lang, languages[target_lang])
+
+    speech = speak(translated)
+
+    return text, translated, speech
