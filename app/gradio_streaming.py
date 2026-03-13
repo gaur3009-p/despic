@@ -34,7 +34,7 @@ with gr.Blocks() as demo:
 
     gr.Markdown("# Real-Time Speech Interpreter")
 
-    target_lang = gr.Dropdown( 
+    target = gr.Dropdown( 
         list(languages.keys()), 
         value="Hindi" )
 
