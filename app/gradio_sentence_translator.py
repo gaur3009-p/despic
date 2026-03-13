@@ -57,4 +57,4 @@ with gr.Blocks() as demo:
         outputs=[transcript, translation, audio_out]
     )
 
-demo.launch()
+demo.launch(share = True)
