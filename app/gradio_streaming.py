@@ -16,10 +16,9 @@ with gr.Blocks() as demo:
 
     gr.Markdown("# Real-Time Speech Interpreter")
 
-    target = gr.Dropdown(
-        ["Hindi", "Tamil", "Telugu"],
-        value="Hindi"
-    )
+    target_lang = gr.Dropdown( 
+        list(languages.keys()), 
+        value="Hindi" )
 
     mic = gr.Audio(
         sources=["microphone"],
@@ -38,4 +37,4 @@ with gr.Blocks() as demo:
         outputs=[transcript, translation, audio_out]
     )
 
-demo.launch()
+demo.launch(share = True)
