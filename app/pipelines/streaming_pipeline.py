@@ -1,5 +1,7 @@
 import tempfile
 import soundfile as sf
+import librosa
+import numpy as np
 
 from realtime.vad import detect_speech
 from services.asr import transcribe
@@ -25,7 +27,6 @@ languages = {
     "Sindhi": "snd_Arab",
     "Sanskrit": "san_Deva"
 }
-
 def run_pipeline(audio, sr, target_lang):
 
     # ---- FIX 1: convert stereo to mono ----
