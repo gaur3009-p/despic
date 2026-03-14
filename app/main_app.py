@@ -24,7 +24,11 @@ languages = {
 }
 
 
-def streaming_mode(audio, target):
+# --------------------------
+# LIVE INTERPRETER
+# --------------------------
+
+def interpreter(audio, target):
 
     if audio is None:
         return "", "", None
@@ -34,7 +38,12 @@ def streaming_mode(audio, target):
     return run_pipeline(data, sr, target)
 
 
-def sentence_mode(audio, target):
+
+# --------------------------
+# RECORD TRANSLATOR
+# --------------------------
+
+def translator(audio, target):
 
     if audio is None:
         return "", "", None
@@ -47,13 +56,13 @@ def sentence_mode(audio, target):
 
 with gr.Blocks() as demo:
 
-    gr.Markdown("# 🌍 Real-Time Speech Interpreter")
+    gr.Markdown("# 🌍 AI Speech Interpreter + Translator")
 
     with gr.Row():
 
         mode = gr.Radio(
-            ["Streaming Interpreter", "Sentence Translator"],
-            value="Streaming Interpreter",
+            ["Speech Interpreter (Live)", "Speech Translator (Record)"],
+            value="Speech Interpreter (Live)",
             label="Mode"
         )
 
@@ -63,34 +72,43 @@ with gr.Blocks() as demo:
             label="Target Language"
         )
 
+
     mic = gr.Audio(
         sources=["microphone"],
-        streaming=True,
         type="numpy",
+        streaming=True,
         label="Speak"
     )
+
 
     transcript = gr.Textbox(label="Transcript")
 
     translation = gr.Textbox(label="Translation")
 
-    audio_out = gr.Audio(autoplay=True)
+    audio_out = gr.Audio(
+        autoplay=True,
+        label="Translated Speech"
+    )
 
 
-
-    def router(audio, target, mode):
-
-        if mode == "Streaming Interpreter":
-            return streaming_mode(audio, target)
-
-        else:
-            return sentence_mode(audio, target)
-
-
+    # --------------------------
+    # INTERPRETER STREAM
+    # --------------------------
 
     mic.stream(
-        router,
-        inputs=[mic, target, mode],
+        interpreter,
+        inputs=[mic, target],
+        outputs=[transcript, translation, audio_out]
+    )
+
+
+    # --------------------------
+    # TRANSLATOR RECORD MODE
+    # --------------------------
+
+    mic.change(
+        translator,
+        inputs=[mic, target],
         outputs=[transcript, translation, audio_out]
     )
 
