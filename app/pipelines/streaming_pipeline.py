@@ -27,37 +27,72 @@ languages = {
     "Sindhi": "snd_Arab",
     "Sanskrit": "san_Deva"
 }
+
+
+# global buffers
+audio_buffer = np.array([], dtype=np.float32)
+transcript_buffer = ""
+
+
 def run_pipeline(audio, sr, target_lang):
 
-    # ---- FIX 1: convert stereo to mono ----
+    global audio_buffer
+    global transcript_buffer
+
+    if audio is None:
+        return transcript_buffer, "", None
+
+    # stereo → mono
     if len(audio.shape) > 1:
         audio = np.mean(audio, axis=1)
 
-    # ---- FIX 2: resample for VAD ----
+    audio = audio.astype(np.float32)
+    audio = np.clip(audio, -1.0, 1.0)
+
+    # resample
     if sr != 16000:
-        audio = librosa.resample(audio.astype(float), orig_sr=sr, target_sr=16000)
+        audio = librosa.resample(audio, orig_sr=sr, target_sr=16000)
         sr = 16000
 
-    speech_segments = detect_speech(audio, sr)
+    # accumulate audio
+    audio_buffer = np.concatenate([audio_buffer, audio])
 
-    if len(speech_segments) == 0:
-        return "", "", None
+    # if buffer too small
+    if len(audio_buffer) < 16000:
+        return transcript_buffer, "", None
 
-    segment = speech_segments[0]
+    speech_segments = detect_speech(audio_buffer, sr)
 
-    speech_audio = audio[segment["start"]:segment["end"]]
+    if not speech_segments:
+        return transcript_buffer, "", None
 
+    segment = speech_segments[-1]
+
+    speech_audio = audio_buffer[
+        segment["start"]:segment["end"]
+    ]
+
+    # clear processed buffer
+    audio_buffer = audio_buffer[segment["end"]:]
+
+    # save chunk
     temp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
 
     sf.write(temp.name, speech_audio, sr)
 
     text, src_lang = transcribe(temp.name)
 
-    if text == "":
-        return "", "", None
+    if text.strip() == "":
+        return transcript_buffer, "", None
 
-    translated = translate(text, src_lang, languages[target_lang])
+    transcript_buffer += " " + text
+
+    translated = translate(
+        transcript_buffer,
+        src_lang,
+        languages[target_lang]
+    )
 
     speech = speak(translated)
 
-    return text, translated, speech
+    return transcript_buffer.strip(), translated, speech
