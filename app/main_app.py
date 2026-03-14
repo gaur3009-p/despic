@@ -24,9 +24,9 @@ languages = {
 }
 
 
-# --------------------------
-# LIVE INTERPRETER
-# --------------------------
+# -----------------------------
+# SPEECH INTERPRETER (LIVE)
+# -----------------------------
 
 def interpreter(audio, target):
 
@@ -39,9 +39,9 @@ def interpreter(audio, target):
 
 
 
-# --------------------------
-# RECORD TRANSLATOR
-# --------------------------
+# -----------------------------
+# SPEECH TRANSLATOR (RECORD)
+# -----------------------------
 
 def translator(audio, target):
 
@@ -54,63 +54,85 @@ def translator(audio, target):
 
 
 
+# -----------------------------
+# UI
+# -----------------------------
+
 with gr.Blocks() as demo:
 
     gr.Markdown("# 🌍 AI Speech Interpreter + Translator")
 
-    with gr.Row():
+    # =================================
+    # TAB 1 : LIVE INTERPRETER
+    # =================================
 
-        mode = gr.Radio(
-            ["Speech Interpreter (Live)", "Speech Translator (Record)"],
-            value="Speech Interpreter (Live)",
-            label="Mode"
-        )
+    with gr.Tab("Speech Interpreter (Live)"):
 
-        target = gr.Dropdown(
+        gr.Markdown("### Real-time conversation translation")
+
+        target_interpreter = gr.Dropdown(
             list(languages.keys()),
             value="Hindi",
             label="Target Language"
         )
 
+        mic_stream = gr.Audio(
+            sources=["microphone"],
+            streaming=True,
+            type="numpy",
+            label="Speak"
+        )
 
-    mic = gr.Audio(
-        sources=["microphone"],
-        type="numpy",
-        streaming=True,
-        label="Speak"
-    )
+        transcript_stream = gr.Textbox(label="Transcript")
 
+        translation_stream = gr.Textbox(label="Translation")
 
-    transcript = gr.Textbox(label="Transcript")
+        audio_stream = gr.Audio(
+            autoplay=True,
+            label="Translated Speech"
+        )
 
-    translation = gr.Textbox(label="Translation")
-
-    audio_out = gr.Audio(
-        autoplay=True,
-        label="Translated Speech"
-    )
-
-
-    # --------------------------
-    # INTERPRETER STREAM
-    # --------------------------
-
-    mic.stream(
-        interpreter,
-        inputs=[mic, target],
-        outputs=[transcript, translation, audio_out]
-    )
+        mic_stream.stream(
+            interpreter,
+            inputs=[mic_stream, target_interpreter],
+            outputs=[transcript_stream, translation_stream, audio_stream]
+        )
 
 
-    # --------------------------
-    # TRANSLATOR RECORD MODE
-    # --------------------------
+    # =================================
+    # TAB 2 : SPEECH TRANSLATOR
+    # =================================
 
-    mic.change(
-        translator,
-        inputs=[mic, target],
-        outputs=[transcript, translation, audio_out]
-    )
+    with gr.Tab("Speech Translator (Record)"):
+
+        gr.Markdown("### Record speech and translate")
+
+        target_translator = gr.Dropdown(
+            list(languages.keys()),
+            value="Hindi",
+            label="Target Language"
+        )
+
+        mic_record = gr.Audio(
+            sources=["microphone"],
+            type="numpy",
+            label="Record Speech"
+        )
+
+        transcript_record = gr.Textbox(label="Transcript")
+
+        translation_record = gr.Textbox(label="Translation")
+
+        audio_record = gr.Audio(
+            autoplay=True,
+            label="Translated Speech"
+        )
+
+        mic_record.change(
+            translator,
+            inputs=[mic_record, target_translator],
+            outputs=[transcript_record, translation_record, audio_record]
+        )
 
 
 demo.launch(share=True)
