@@ -12,10 +12,21 @@ from services.tts_engine import speak
 languages = {
     "English": "eng_Latn",
     "Hindi": "hin_Deva",
+    "Bengali": "ben_Beng",
     "Tamil": "tam_Taml",
-    "Telugu": "tel_Telu"
+    "Telugu": "tel_Telu",
+    "Kannada": "kan_Knda",
+    "Malayalam": "mal_Mlym",
+    "Marathi": "mar_Deva",
+    "Gujarati": "guj_Gujr",
+    "Punjabi": "pan_Guru",
+    "Urdu": "urd_Arab",
+    "Nepali": "npi_Deva",
+    "Odia": "ory_Orya",
+    "Assamese": "asm_Beng",
+    "Sindhi": "snd_Arab",
+    "Sanskrit": "san_Deva"
 }
-
 
 def run_travel_pipeline(audio, sr, target_lang):
 
