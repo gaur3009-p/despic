@@ -107,33 +107,33 @@ with gr.Blocks() as demo:
 
         gr.Markdown("translator")
     
-            target_translator = gr.Dropdown(
-                list(languages.keys()),
-                value="Hindi",
-                label="Target Language"
-            )
+        target_translator = gr.Dropdown(
+            list(languages.keys()),
+            value="Hindi",
+            label="Target Language"
+        )
         
-            mic_record = gr.Audio(
-                sources=["microphone"],
-                type="numpy",
-                label="Record Speech"
-            )
+        mic_record = gr.Audio(
+            sources=["microphone"],
+            type="numpy",
+            label="Record Speech"
+        )
         
-            translate_btn = gr.Button("Translate & Dub")
+        translate_btn = gr.Button("Translate & Dub")
         
-            transcript_record = gr.Textbox(label="Transcript")
+        transcript_record = gr.Textbox(label="Transcript")
         
-            translation_record = gr.Textbox(label="Translation")
+        translation_record = gr.Textbox(label="Translation")
         
-            audio_record = gr.Audio(
-                autoplay=True,
-                label="Translated Speech"
-            )
+        audio_record = gr.Audio(
+            autoplay=True,
+            label="Translated Speech"
+        )
         
-            translate_btn.click(
-                translator,
-                inputs=[mic_record, target_translator],
-                outputs=[transcript_record, translation_record, audio_record]
-            )
+        translate_btn.click(
+            translator,
+            inputs=[mic_record, target_translator],
+            outputs=[transcript_record, translation_record, audio_record]
+        )
 
 demo.launch(share=True)
