@@ -105,34 +105,35 @@ with gr.Blocks() as demo:
 
     with gr.Tab("Speech Translator (Record)"):
 
-        gr.Markdown("### Record speech and translate")
-
-        target_translator = gr.Dropdown(
-            list(languages.keys()),
-            value="Hindi",
-            label="Target Language"
-        )
-
-        mic_record = gr.Audio(
-            sources=["microphone"],
-            type="numpy",
-            label="Record Speech"
-        )
-
-        transcript_record = gr.Textbox(label="Transcript")
-
-        translation_record = gr.Textbox(label="Translation")
-
-        audio_record = gr.Audio(
-            autoplay=True,
-            label="Translated Speech"
-        )
-
-        mic_record.change(
-            translator,
-            inputs=[mic_record, target_translator],
-            outputs=[transcript_record, translation_record, audio_record]
-        )
-
+        gr.Markdown("translator")
+    
+            target_translator = gr.Dropdown(
+                list(languages.keys()),
+                value="Hindi",
+                label="Target Language"
+            )
+        
+            mic_record = gr.Audio(
+                sources=["microphone"],
+                type="numpy",
+                label="Record Speech"
+            )
+        
+            translate_btn = gr.Button("Translate & Dub")
+        
+            transcript_record = gr.Textbox(label="Transcript")
+        
+            translation_record = gr.Textbox(label="Translation")
+        
+            audio_record = gr.Audio(
+                autoplay=True,
+                label="Translated Speech"
+            )
+        
+            translate_btn.click(
+                translator,
+                inputs=[mic_record, target_translator],
+                outputs=[transcript_record, translation_record, audio_record]
+            )
 
 demo.launch(share=True)
