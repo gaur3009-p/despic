@@ -6,7 +6,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 model = WhisperModel(
-    "large-v3",
+    "medium",
     device=device,
     compute_type="float16" if device == "cuda" else "int8"
 )
