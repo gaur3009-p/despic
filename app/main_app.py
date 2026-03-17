@@ -24,116 +24,85 @@ languages = {
 }
 
 
-# -----------------------------
-# SPEECH INTERPRETER (LIVE)
-# -----------------------------
-
 def interpreter(audio, target):
 
     if audio is None:
-        return "", "", None
+        return "", "", None, ""
 
     sr, data = audio
 
-    return run_pipeline(data, sr, target)
+    text, translated, speech, timings = run_pipeline(data, sr, target)
 
+    latency = f"""
+ASR: {timings.get('asr',0)} ms
+Translation: {timings.get('translation',0)} ms
+TTS: {timings.get('tts',0)} ms
+Total: {timings.get('total',0)} ms
+"""
 
+    return text, translated, speech, latency
 
-# -----------------------------
-# SPEECH TRANSLATOR (RECORD)
-# -----------------------------
 
 def translator(audio, target):
 
     if audio is None:
-        return "", "", None
+        return "", "", None, ""
 
     sr, data = audio
 
-    return run_travel_pipeline(data, sr, target)
+    text, translated, speech, timings = run_travel_pipeline(data, sr, target)
 
+    latency = f"""
+ASR: {timings.get('asr',0)} ms
+Translation: {timings.get('translation',0)} ms
+TTS: {timings.get('tts',0)} ms
+Total: {timings.get('total',0)} ms
+"""
 
+    return text, translated, speech, latency
 
-# -----------------------------
-# UI
-# -----------------------------
 
 with gr.Blocks() as demo:
 
     gr.Markdown("# 🌍 AI Speech Interpreter + Translator")
 
-    # =================================
-    # TAB 1 : LIVE INTERPRETER
-    # =================================
-
+    # -------- Interpreter --------
     with gr.Tab("Speech Interpreter (Live)"):
 
-        gr.Markdown("### Real-time conversation translation")
+        target_i = gr.Dropdown(list(languages.keys()), value="Hindi")
 
-        target_interpreter = gr.Dropdown(
-            list(languages.keys()),
-            value="Hindi",
-            label="Target Language"
-        )
+        mic_stream = gr.Audio(sources=["microphone"], streaming=True, type="numpy")
 
-        mic_stream = gr.Audio(
-            sources=["microphone"],
-            streaming=True,
-            type="numpy",
-            label="Speak"
-        )
-
-        transcript_stream = gr.Textbox(label="Transcript")
-
-        translation_stream = gr.Textbox(label="Translation")
-
-        audio_stream = gr.Audio(
-            autoplay=True,
-            label="Translated Speech"
-        )
+        transcript_i = gr.Textbox(label="Transcript")
+        translation_i = gr.Textbox(label="Translation")
+        audio_i = gr.Audio(autoplay=True)
+        latency_i = gr.Textbox(label="Latency")
 
         mic_stream.stream(
             interpreter,
-            inputs=[mic_stream, target_interpreter],
-            outputs=[transcript_stream, translation_stream, audio_stream]
+            inputs=[mic_stream, target_i],
+            outputs=[transcript_i, translation_i, audio_i, latency_i]
         )
 
-
-    # =================================
-    # TAB 2 : SPEECH TRANSLATOR
-    # =================================
-
+    # -------- Translator --------
     with gr.Tab("Speech Translator (Record)"):
 
-        gr.Markdown("translator")
-    
-        target_translator = gr.Dropdown(
-            list(languages.keys()),
-            value="Hindi",
-            label="Target Language"
-        )
-        
-        mic_record = gr.Audio(
-            sources=["microphone"],
-            type="numpy",
-            label="Record Speech"
-        )
-        
-        translate_btn = gr.Button("Translate & Dub")
-        
-        transcript_record = gr.Textbox(label="Transcript")
-        
-        translation_record = gr.Textbox(label="Translation")
-        
-        audio_record = gr.Audio(
-            autoplay=True,
-            label="Translated Speech"
-        )
-        
-        translate_btn.click(
+        target_t = gr.Dropdown(list(languages.keys()), value="Hindi")
+
+        mic_record = gr.Audio(sources=["microphone"], type="numpy")
+
+        btn = gr.Button("Translate & Dub")
+
+        transcript_t = gr.Textbox(label="Transcript")
+        translation_t = gr.Textbox(label="Translation")
+        audio_t = gr.Audio(autoplay=True)
+        latency_t = gr.Textbox(label="Latency")
+
+        btn.click(
             translator,
-            inputs=[mic_record, target_translator],
-            outputs=[transcript_record, translation_record, audio_record]
+            inputs=[mic_record, target_t],
+            outputs=[transcript_t, translation_t, audio_t, latency_t]
         )
+
 
 demo.launch(share=True)
