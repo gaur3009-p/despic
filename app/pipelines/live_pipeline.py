@@ -1,9 +1,8 @@
-import tempfile
-import soundfile as sf
 import time
 
 from realtime.chunker import VoiceChunker
-from services.asr_travel import transcribe_travel   # medium Whisper – best accuracy without TTS cost
+from realtime.parallel_worker import ParallelChunkProcessor
+from services.asr_travel import transcribe_travel   # medium Whisper for accuracy
 from services.translator import translate
 
 LANGUAGES = {
@@ -25,74 +24,91 @@ LANGUAGES = {
     "Sanskrit":  "san_Deva",
 }
 
-# ── Per-session state ────────────────────────────────────────────────────────
-# For single-user (Gradio default), module-level globals are fine.
-# For multi-user: key by session id.
+_chunker        = VoiceChunker(silence_trigger_ms=450, min_speech_ms=250, max_chunk_ms=8000)
+_transcript     = ""
+_translation    = ""
+_current_target = "Hindi"
 
-_chunker     = VoiceChunker(silence_trigger_ms=400, min_speech_ms=250, max_chunk_ms=7000)
-_transcript  = ""   # accumulated original text
-_translation = ""   # accumulated translated text
+
+def _process_chunk(wav_path: str) -> dict:
+    """
+    Runs in a thread-pool thread.
+    Whisper medium ASR + NLLB translation — fully parallel across chunks.
+    """
+    t0 = time.perf_counter()
+    text, src_lang = transcribe_travel(wav_path)
+    asr_ms = round((time.perf_counter() - t0) * 1000, 1)
+
+    if not text.strip():
+        return {"text": "", "translated": "", "asr_ms": asr_ms, "tr_ms": 0.0}
+
+    tgt_code   = LANGUAGES.get(_current_target, "hin_Deva")
+    t_tr       = time.perf_counter()
+    translated = translate(text.strip(), src_lang, tgt_code)
+    tr_ms      = round((time.perf_counter() - t_tr) * 1000, 1)
+
+    return {
+        "text":       text.strip(),
+        "translated": translated.strip(),
+        "asr_ms":     asr_ms,
+        "tr_ms":      tr_ms,
+    }
+
+
+_processor = ParallelChunkProcessor(process_fn=_process_chunk, max_in_flight=8)
 
 
 def reset_live():
-    """Call when the user starts a new live session."""
     global _transcript, _translation
     _chunker.reset()
+    _processor.reset()
     _transcript  = ""
     _translation = ""
 
 
-def run_live_pipeline(
-    audio,
-    sr: int,
-    target_lang: str,
-) -> tuple[str, str, str]:
+def run_live_pipeline(audio, sr: int, target_lang: str):
     """
-    Gradio streaming callback – fires on every mic frame.
+    Gradio streaming callback — no TTS.
 
-    Returns:
-        transcript  – growing original text
-        translation – growing translated text
-        latency_str – timing info string
+    Returns (transcript, translation, latency_str).
+    Both text boxes grow one line per chunk, always in sync.
     """
-    global _transcript, _translation
+    global _transcript, _translation, _current_target
 
     if audio is None:
         return _transcript, _translation, ""
 
-    t0 = time.perf_counter()
+    _current_target = target_lang
+    t_frame = time.perf_counter()
 
-    # ── Feed into VAD chunker ────────────────────────────────────────────────
     chunk = _chunker.push(audio, sr)
+    if chunk is not None:
+        _processor.push(chunk, sample_rate=16000)
 
-    if chunk is None:
-        # Still accumulating – return current buffers immediately (no flicker)
+    ready = _processor.drain()
+    if not ready:
         return _transcript, _translation, ""
 
-    # ── Write chunk to temp WAV ──────────────────────────────────────────────
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-        sf.write(tmp.name, chunk, 16000)
-        tmp_path = tmp.name
+    total_asr = 0.0
+    total_tr  = 0.0
+    new_lines = 0
 
-    # ── ASR (Whisper medium) ─────────────────────────────────────────────────
-    t_asr = time.perf_counter()
-    text, src_lang = transcribe_travel(tmp_path)
-    asr_ms = round((time.perf_counter() - t_asr) * 1000, 1)
+    for _seq, result in ready:
+        if not result.get("text"):
+            continue
+        # Append line-by-line so both columns stay aligned
+        _transcript  = (_transcript  + "\n" + result["text"]).lstrip("\n")
+        _translation = (_translation + "\n" + result["translated"]).lstrip("\n")
+        total_asr += result["asr_ms"]
+        total_tr  += result["tr_ms"]
+        new_lines  += 1
 
-    if not text.strip():
+    if new_lines == 0:
         return _transcript, _translation, ""
 
-    # ── Translation ──────────────────────────────────────────────────────────
-    t_tr = time.perf_counter()
-    tgt_code   = LANGUAGES.get(target_lang, "hin_Deva")
-    new_trans  = translate(text.strip(), src_lang, tgt_code)
-    tr_ms      = round((time.perf_counter() - t_tr) * 1000, 1)
-
-    # Append both in lockstep — one new line per chunk so columns stay aligned
-    _transcript  = (_transcript  + "\n" + text.strip()).lstrip("\n")
-    _translation = (_translation + "\n" + new_trans.strip()).lstrip("\n")
-
-    total_ms = round((time.perf_counter() - t0) * 1000, 1)
-    latency  = f"ASR {asr_ms} ms  |  Translate {tr_ms} ms  |  Total {total_ms} ms"
-
+    total_ms = round((time.perf_counter() - t_frame) * 1000, 1)
+    latency  = (
+        f"ASR {total_asr:.0f} ms  |  Translate {total_tr:.0f} ms  |  "
+        f"Total {total_ms} ms  |  pool: {_processor.in_flight} in-flight"
+    )
     return _transcript, _translation, latency
