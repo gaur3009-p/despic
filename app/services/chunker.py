@@ -1,11 +1,3 @@
-"""
-Voice-activity-based chunker for streaming audio.
-Accumulates audio frames and yields complete speech chunks
-as soon as a silence gap is detected after speech, enabling
-low-latency sentence-level processing without waiting for
-fixed-size windows.
-"""
-
 import numpy as np
 import torch
 from silero_vad import load_silero_vad, get_speech_timestamps
