@@ -5,6 +5,7 @@ from realtime.parallel_worker import ParallelChunkProcessor
 from services.asr import transcribe
 from services.translator import translate
 from services.tts_engine import speak
+from services.transcript_formatter import TranscriptFormatter
 
 LANGUAGES = {
     "English":   "eng_Latn",
@@ -25,17 +26,13 @@ LANGUAGES = {
     "Sanskrit":  "san_Deva",
 }
 
-_chunker         = VoiceChunker(silence_trigger_ms=500, min_speech_ms=300, max_chunk_ms=8000)
-_transcript_buf  = ""
-_translation_buf = ""
-_current_target  = "Hindi"
+_chunker        = VoiceChunker(silence_trigger_ms=500, min_speech_ms=300, max_chunk_ms=8000)
+_fmt            = TranscriptFormatter()
+_current_target = "Hindi"
 
 
 def _process_chunk(wav_path: str) -> dict:
-    """
-    Runs inside a thread-pool thread.
-    ASR + Translation happen here — in parallel with other chunks.
-    """
+    """Thread-pool worker: ASR + Translation, fully parallel across chunks."""
     t0 = time.perf_counter()
     text, src_lang = transcribe(wav_path)
     asr_ms = round((time.perf_counter() - t0) * 1000, 1)
@@ -61,18 +58,25 @@ _processor = ParallelChunkProcessor(process_fn=_process_chunk, max_in_flight=8)
 
 
 def reset_stream():
-    global _transcript_buf, _translation_buf
+    global _current_target
     _chunker.reset()
     _processor.reset()
-    _transcript_buf  = ""
-    _translation_buf = ""
+    _fmt.reset()
+    _current_target = "Hindi"
 
 
 def run_pipeline(audio, sr: int, target_lang: str):
-    global _transcript_buf, _translation_buf, _current_target
+    """
+    Gradio streaming callback.
+
+    Returns (transcript_display, translation_display, speech_file, latency_str).
+    Transcript and translation are both clean formatted rolling windows.
+    """
+    global _current_target
 
     if audio is None:
-        return _transcript_buf, _translation_buf, None, ""
+        t, tr = _fmt.display()
+        return t, tr, None, ""
 
     _current_target = target_lang
     t_frame = time.perf_counter()
@@ -83,7 +87,8 @@ def run_pipeline(audio, sr: int, target_lang: str):
 
     ready = _processor.drain()
     if not ready:
-        return _transcript_buf, _translation_buf, None, ""
+        t, tr = _fmt.display()
+        return t, tr, None, ""
 
     last_translated = ""
     total_asr = 0.0
@@ -92,15 +97,17 @@ def run_pipeline(audio, sr: int, target_lang: str):
     for _seq, result in ready:
         if not result.get("text"):
             continue
-        _transcript_buf  = (_transcript_buf  + " " + result["text"]).strip()
-        _translation_buf = (_translation_buf + " " + result["translated"]).strip()
-        last_translated  = result["translated"]
+        _fmt.push(result["text"], result["translated"])
+        last_translated = result["translated"]
         total_asr += result["asr_ms"]
         total_tr  += result["tr_ms"]
 
-    if not last_translated:
-        return _transcript_buf, _translation_buf, None, ""
+    transcript_display, translation_display = _fmt.display()
 
+    if not last_translated:
+        return transcript_display, translation_display, None, ""
+
+    # TTS on latest translated chunk — serial to avoid overlapping audio
     t_tts = time.perf_counter()
     speech_file = speak(last_translated)
     tts_ms = round((time.perf_counter() - t_tts) * 1000, 1)
@@ -111,4 +118,4 @@ def run_pipeline(audio, sr: int, target_lang: str):
         f"TTS {tts_ms} ms  |  Total {total_ms} ms  |  "
         f"pool: {_processor.in_flight} in-flight"
     )
-    return _transcript_buf, _translation_buf, speech_file, latency
+    return transcript_display, translation_display, speech_file, latency
