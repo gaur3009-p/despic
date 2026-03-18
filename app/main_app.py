@@ -1,40 +1,49 @@
 import gradio as gr
-from pipelines.streaming_pipeline import run_pipeline, reset_stream, LANGUAGES
-from pipelines.sentence_pipeline  import run_travel_pipeline
+
+from pipelines.streaming_pipeline import (
+    run_pipeline       as run_stream,
+    reset_stream,
+    LANGUAGES,
+)
+from pipelines.live_pipeline import (
+    run_live_pipeline  as run_live,
+    reset_live,
+)
+from pipelines.sentence_pipeline import run_travel_pipeline
 
 LANG_NAMES = list(LANGUAGES.keys())
 
-# ---------------------------------------------------------------------------
-# Gradio callback wrappers
-# ---------------------------------------------------------------------------
+# ── Gradio callbacks ──────────────────────────────────────────────────────────
 
-def _interpreter_cb(audio, target_lang, transcript_state):
-    """Streaming callback – fires on every audio chunk from the microphone."""
+def _stream_cb(audio, target_lang, _state):
     if audio is None:
-        return transcript_state, "", None, ""
-
+        return _state, "", None, ""
     sr, data = audio
-    transcript, translation, speech, latency = run_pipeline(data, sr, target_lang)
+    transcript, translation, speech, latency = run_stream(data, sr, target_lang)
     return transcript, translation, speech, latency
 
-
-def _new_session_cb():
-    """Reset internal streaming state when the user starts a new session."""
+def _stream_reset():
     reset_stream()
     return "", "", None, ""
 
+def _live_cb(audio, target_lang):
+    if audio is None:
+        return "", "", ""
+    sr, data = audio
+    transcript, translation, latency = run_live(data, sr, target_lang)
+    return transcript, translation, latency
 
-def _translator_cb(audio, target_lang):
-    """One-shot callback for the recorded-sentence tab."""
+def _live_reset():
+    reset_live()
+    return "", "", ""
+
+def _sentence_cb(audio, target_lang):
     if audio is None:
         return "", "", None, ""
-
     sr, data = audio
     text, translated, speech, timings = run_travel_pipeline(data, sr, target_lang)
-
     if not timings:
         return text, translated, speech, ""
-
     latency = (
         f"ASR {timings.get('asr', 0)} ms  |  "
         f"Translate {timings.get('translation', 0)} ms  |  "
@@ -43,26 +52,25 @@ def _translator_cb(audio, target_lang):
     )
     return text, translated, speech, latency
 
-
-# ---------------------------------------------------------------------------
-# CSS – dark, minimal, production-quality
-# ---------------------------------------------------------------------------
+# ── CSS ───────────────────────────────────────────────────────────────────────
 
 CSS = """
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;800&display=swap');
 
 :root {
-    --bg:       #0d0f14;
-    --surface:  #151820;
-    --border:   #252a35;
-    --accent:   #4f8ef7;
-    --accent2:  #a78bfa;
-    --success:  #34d399;
-    --text:     #e2e8f0;
-    --muted:    #64748b;
-    --radius:   10px;
-    --font-ui:  'Syne', sans-serif;
-    --font-mono:'DM Mono', monospace;
+    --bg:        #0d0f14;
+    --surface:   #151820;
+    --surface2:  #1c2030;
+    --border:    #252a35;
+    --accent:    #4f8ef7;
+    --accent2:   #a78bfa;
+    --live:      #f97316;
+    --success:   #34d399;
+    --text:      #e2e8f0;
+    --muted:     #64748b;
+    --radius:    10px;
+    --font-ui:   'Syne', sans-serif;
+    --font-mono: 'DM Mono', monospace;
 }
 
 body, .gradio-container {
@@ -71,257 +79,218 @@ body, .gradio-container {
     font-family: var(--font-ui) !important;
 }
 
-/* Header */
 .app-header {
     text-align: center;
-    padding: 2.5rem 1rem 1.5rem;
+    padding: 2.2rem 1rem 1.4rem;
     border-bottom: 1px solid var(--border);
     margin-bottom: 1.5rem;
 }
 .app-header h1 {
-    font-size: 2rem;
-    font-weight: 800;
-    letter-spacing: -0.5px;
+    font-size: 2rem; font-weight: 800; letter-spacing: -0.5px;
     background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    margin: 0 0 0.4rem;
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; margin: 0 0 0.35rem;
 }
-.app-header p {
-    color: var(--muted);
-    font-size: 0.9rem;
-    font-weight: 400;
-    margin: 0;
-}
+.app-header p { color: var(--muted); font-size: 0.88rem; margin: 0; }
 
-/* Tabs */
 .tab-nav button {
-    background: transparent !important;
-    border: none !important;
-    color: var(--muted) !important;
-    font-family: var(--font-ui) !important;
-    font-weight: 600 !important;
-    font-size: 0.9rem !important;
-    padding: 0.6rem 1.2rem !important;
-    border-bottom: 2px solid transparent !important;
-    transition: all 0.2s !important;
+    background: transparent !important; border: none !important;
+    color: var(--muted) !important; font-family: var(--font-ui) !important;
+    font-weight: 600 !important; font-size: 0.88rem !important;
+    padding: 0.6rem 1.1rem !important;
+    border-bottom: 2px solid transparent !important; transition: all 0.2s !important;
 }
-.tab-nav button.selected {
-    color: var(--accent) !important;
-    border-bottom-color: var(--accent) !important;
-}
+.tab-nav button.selected { color: var(--accent) !important; border-bottom-color: var(--accent) !important; }
 
-/* Panels */
-.panel {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 1.25rem;
-}
-
-/* Labels */
 label span {
-    font-family: var(--font-ui) !important;
-    font-size: 0.78rem !important;
-    font-weight: 600 !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.08em !important;
-    color: var(--muted) !important;
+    font-family: var(--font-ui) !important; font-size: 0.74rem !important;
+    font-weight: 600 !important; text-transform: uppercase !important;
+    letter-spacing: 0.08em !important; color: var(--muted) !important;
 }
 
-/* Textboxes */
 textarea, input[type="text"] {
-    background: var(--bg) !important;
-    border: 1px solid var(--border) !important;
-    color: var(--text) !important;
-    border-radius: var(--radius) !important;
-    font-family: var(--font-mono) !important;
-    font-size: 0.9rem !important;
+    background: var(--bg) !important; border: 1px solid var(--border) !important;
+    color: var(--text) !important; border-radius: var(--radius) !important;
+    font-family: var(--font-mono) !important; font-size: 0.88rem !important;
+    transition: border-color 0.15s !important;
 }
 textarea:focus, input[type="text"]:focus {
     border-color: var(--accent) !important;
-    box-shadow: 0 0 0 3px rgba(79,142,247,0.15) !important;
+    box-shadow: 0 0 0 3px rgba(79,142,247,0.12) !important; outline: none !important;
 }
 
-/* Latency bar */
-.latency-box textarea {
-    color: var(--success) !important;
-    font-size: 0.78rem !important;
-    font-family: var(--font-mono) !important;
-}
+.latency-box textarea { color: var(--success) !important; font-size: 0.76rem !important; }
+.trans-box textarea   { background: var(--surface2) !important; color: #c4b5fd !important; }
 
-/* Dropdown */
 .wrap-inner {
-    background: var(--bg) !important;
-    border-color: var(--border) !important;
-    color: var(--text) !important;
-    font-family: var(--font-ui) !important;
+    background: var(--bg) !important; border-color: var(--border) !important;
+    color: var(--text) !important; font-family: var(--font-ui) !important;
 }
 
-/* Primary button */
 button.primary {
     background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%) !important;
-    border: none !important;
-    color: #fff !important;
-    font-family: var(--font-ui) !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.04em !important;
-    border-radius: var(--radius) !important;
-    padding: 0.65rem 1.6rem !important;
-    transition: opacity 0.2s !important;
+    border: none !important; color: #fff !important;
+    font-family: var(--font-ui) !important; font-weight: 700 !important;
+    letter-spacing: 0.04em !important; border-radius: var(--radius) !important;
+    padding: 0.65rem 1.6rem !important; transition: opacity 0.2s !important;
 }
-button.primary:hover { opacity: 0.88 !important; }
+button.primary:hover { opacity: 0.85 !important; }
 
-/* Reset button */
 button.secondary {
-    background: transparent !important;
-    border: 1px solid var(--border) !important;
-    color: var(--muted) !important;
-    font-family: var(--font-ui) !important;
-    font-size: 0.8rem !important;
-    border-radius: var(--radius) !important;
+    background: transparent !important; border: 1px solid var(--border) !important;
+    color: var(--muted) !important; font-family: var(--font-ui) !important;
+    font-size: 0.8rem !important; border-radius: var(--radius) !important;
+    transition: all 0.15s !important;
 }
-button.secondary:hover {
-    border-color: var(--accent) !important;
-    color: var(--accent) !important;
-}
+button.secondary:hover { border-color: var(--accent) !important; color: var(--accent) !important; }
 
-/* Status dot for live tab */
-.live-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.75rem;
-    color: var(--success);
-    font-family: var(--font-mono);
-    margin-bottom: 0.75rem;
+.badge {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 0.74rem; font-family: var(--font-mono);
+    margin-bottom: 0.9rem; padding: 0.3rem 0.9rem;
+    border-radius: 99px; border: 1px solid;
 }
-.live-dot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    background: var(--success);
-    animation: pulse 1.5s infinite;
-}
+.badge-stream { color: var(--accent);  border-color: rgba(79,142,247,0.3);  background: rgba(79,142,247,0.06); }
+.badge-live   { color: var(--live);    border-color: rgba(249,115,22,0.3);  background: rgba(249,115,22,0.06); }
+.badge-rec    { color: var(--success); border-color: rgba(52,211,153,0.3);  background: rgba(52,211,153,0.06); }
+
+.dot { width:7px; height:7px; border-radius:50%; animation: pulse 1.6s infinite; }
+.dot-blue   { background: var(--accent); }
+.dot-orange { background: var(--live); }
+.dot-green  { background: var(--success); }
+
 @keyframes pulse {
-    0%,100% { opacity:1; transform:scale(1); }
-    50%      { opacity:0.4; transform:scale(1.3); }
+    0%,100% { opacity:1; transform:scale(1);   }
+    50%      { opacity:.4; transform:scale(1.4); }
 }
 
-/* Grid layout helpers */
-.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-@media (max-width: 720px) { .two-col { grid-template-columns: 1fr; } }
+.note {
+    font-size: 0.78rem; color: var(--muted);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 0.55rem 0.9rem;
+    margin-bottom: 1rem; font-family: var(--font-mono);
+}
+
+.side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+@media (max-width: 740px) { .side-by-side { grid-template-columns: 1fr; } }
 """
 
-# ---------------------------------------------------------------------------
-# Build the app
-# ---------------------------------------------------------------------------
+# ── App ───────────────────────────────────────────────────────────────────────
 
 with gr.Blocks(css=CSS, title="AI Speech Interpreter") as demo:
 
-    # ── Header ──────────────────────────────────────────────────────────────
     gr.HTML("""
     <div class="app-header">
       <h1>🌐 AI Speech Interpreter</h1>
-      <p>Real-time speech translation across 16 Indic + world languages</p>
+      <p>Real-time speech translation across 16 Indic &amp; world languages</p>
     </div>
     """)
 
-    # ── Tabs ─────────────────────────────────────────────────────────────────
     with gr.Tabs():
 
-        # ── Tab 1: Live Streaming ──────────────────────────────────────────
+        # ── Tab 1: Live Interpreter (streaming + dubbing) ─────────────────────
         with gr.Tab("⚡ Live Interpreter"):
-
-            gr.HTML('<div class="live-badge"><span class="live-dot"></span>Streams in real-time · chunk-triggered · low latency</div>')
+            gr.HTML("""<div class="badge badge-stream">
+              <span class="dot dot-blue"></span>
+              Streaming · Whisper small · chunk-triggered · with audio dubbing
+            </div>""")
 
             with gr.Row():
                 with gr.Column(scale=1):
-                    target_live = gr.Dropdown(
-                        LANG_NAMES, value="Hindi",
-                        label="Translate to"
-                    )
-                    mic_stream = gr.Audio(
-                        sources=["microphone"],
-                        streaming=True,
-                        type="numpy",
-                        label="Microphone"
-                    )
-                    reset_btn = gr.Button("↺  New Session", variant="secondary", size="sm")
+                    tgt_stream = gr.Dropdown(LANG_NAMES, value="Hindi", label="Translate to")
+                    mic_stream = gr.Audio(sources=["microphone"], streaming=True,
+                                         type="numpy", label="Microphone")
+                    reset_stream_btn = gr.Button("↺  New Session", variant="secondary", size="sm")
 
                 with gr.Column(scale=2):
-                    transcript_live = gr.Textbox(
-                        label="Transcript (original)",
-                        lines=4, interactive=False
-                    )
-                    translation_live = gr.Textbox(
-                        label="Translation",
-                        lines=4, interactive=False
-                    )
-                    audio_live = gr.Audio(
-                        label="Dubbed audio",
-                        autoplay=True, interactive=False
-                    )
-                    latency_live = gr.Textbox(
-                        label="Latency",
-                        lines=1, interactive=False,
-                        elem_classes=["latency-box"]
-                    )
+                    with gr.Row(elem_classes=["side-by-side"]):
+                        transcript_stream  = gr.Textbox(label="Transcript (original)",
+                                                        lines=5, interactive=False)
+                        translation_stream = gr.Textbox(label="Translation",
+                                                        lines=5, interactive=False,
+                                                        elem_classes=["trans-box"])
+                    audio_stream   = gr.Audio(label="Dubbed audio", autoplay=True, interactive=False)
+                    latency_stream = gr.Textbox(label="Latency", lines=1, interactive=False,
+                                                elem_classes=["latency-box"])
 
-            # Wiring
             mic_stream.stream(
-                _interpreter_cb,
-                inputs=[mic_stream, target_live, transcript_live],
-                outputs=[transcript_live, translation_live, audio_live, latency_live],
+                _stream_cb,
+                inputs=[mic_stream, tgt_stream, transcript_stream],
+                outputs=[transcript_stream, translation_stream, audio_stream, latency_stream],
             )
-            reset_btn.click(
-                _new_session_cb,
-                outputs=[transcript_live, translation_live, audio_live, latency_live],
+            reset_stream_btn.click(
+                _stream_reset,
+                outputs=[transcript_stream, translation_stream, audio_stream, latency_stream],
             )
 
-        # ── Tab 2: Sentence Translator ──────────────────────────────────────
-        with gr.Tab("🎙 Speech Translator"):
-
-            gr.Markdown(
-                "_Record a sentence – uses the high-accuracy Whisper **medium** model "
-                "with full beam search for best transcription quality._",
-            )
+        # ── Tab 2: Live Transcription + Translation (NO dubbing) ──────────────
+        with gr.Tab("📝 Live Transcription"):
+            gr.HTML("""<div class="badge badge-live">
+              <span class="dot dot-orange"></span>
+              Real-time text only · Whisper medium · fastest feedback · no audio generation
+            </div>""")
+            gr.HTML("""<div class="note">
+              ℹ&nbsp; Transcript and translation update simultaneously as you speak.
+              No TTS — so feedback is near-instant. Uses Whisper <strong>medium</strong> for accuracy.
+            </div>""")
 
             with gr.Row():
                 with gr.Column(scale=1):
-                    target_sent = gr.Dropdown(
-                        LANG_NAMES, value="Hindi",
-                        label="Translate to"
-                    )
-                    mic_record = gr.Audio(
-                        sources=["microphone"],
-                        type="numpy",
-                        label="Record your voice"
-                    )
+                    tgt_live = gr.Dropdown(LANG_NAMES, value="Hindi", label="Translate to")
+                    mic_live = gr.Audio(sources=["microphone"], streaming=True,
+                                        type="numpy", label="Microphone")
+                    reset_live_btn = gr.Button("↺  New Session", variant="secondary", size="sm")
+
+                with gr.Column(scale=2):
+                    with gr.Row(elem_classes=["side-by-side"]):
+                        transcript_live  = gr.Textbox(label="Live Transcript",
+                                                      lines=10, interactive=False,
+                                                      placeholder="Start speaking…")
+                        translation_live = gr.Textbox(label="Live Translation",
+                                                      lines=10, interactive=False,
+                                                      elem_classes=["trans-box"],
+                                                      placeholder="Translation will appear here…")
+                    latency_live = gr.Textbox(label="Latency (per chunk)", lines=1,
+                                              interactive=False, elem_classes=["latency-box"])
+
+            mic_live.stream(
+                _live_cb,
+                inputs=[mic_live, tgt_live],
+                outputs=[transcript_live, translation_live, latency_live],
+            )
+            reset_live_btn.click(
+                _live_reset,
+                outputs=[transcript_live, translation_live, latency_live],
+            )
+
+        # ── Tab 3: Sentence Translator (record + dub) ─────────────────────────
+        with gr.Tab("🎙 Speech Translator"):
+            gr.HTML("""<div class="badge badge-rec">
+              <span class="dot dot-green"></span>
+              Record a full sentence · Whisper medium · full beam search · highest accuracy
+            </div>""")
+
+            with gr.Row():
+                with gr.Column(scale=1):
+                    tgt_sent = gr.Dropdown(LANG_NAMES, value="Hindi", label="Translate to")
+                    mic_sent = gr.Audio(sources=["microphone"], type="numpy",
+                                        label="Record your voice")
                     translate_btn = gr.Button("Translate & Dub", variant="primary")
 
                 with gr.Column(scale=2):
-                    transcript_sent = gr.Textbox(
-                        label="Transcript (original)",
-                        lines=4, interactive=False
-                    )
-                    translation_sent = gr.Textbox(
-                        label="Translation",
-                        lines=4, interactive=False
-                    )
-                    audio_sent = gr.Audio(
-                        label="Dubbed audio",
-                        autoplay=True, interactive=False
-                    )
-                    latency_sent = gr.Textbox(
-                        label="Latency",
-                        lines=1, interactive=False,
-                        elem_classes=["latency-box"]
-                    )
+                    with gr.Row(elem_classes=["side-by-side"]):
+                        transcript_sent  = gr.Textbox(label="Transcript (original)",
+                                                      lines=5, interactive=False)
+                        translation_sent = gr.Textbox(label="Translation",
+                                                      lines=5, interactive=False,
+                                                      elem_classes=["trans-box"])
+                    audio_sent   = gr.Audio(label="Dubbed audio", autoplay=True, interactive=False)
+                    latency_sent = gr.Textbox(label="Latency", lines=1, interactive=False,
+                                              elem_classes=["latency-box"])
 
             translate_btn.click(
-                _translator_cb,
-                inputs=[mic_record, target_sent],
+                _sentence_cb,
+                inputs=[mic_sent, tgt_sent],
                 outputs=[transcript_sent, translation_sent, audio_sent, latency_sent],
             )
 
