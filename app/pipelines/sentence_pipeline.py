@@ -8,6 +8,7 @@ from realtime.vad import detect_speech
 from services.asr_travel import transcribe_travel
 from services.translator import translate
 from services.tts_engine import speak
+from services.transcript_formatter import format_full_text
 
 LANGUAGES = {
     "English":   "eng_Latn",
@@ -44,21 +45,20 @@ def run_travel_pipeline(audio: np.ndarray, sr: int, target_lang: str):
     """
     Full pipeline for a recorded sentence.
 
-    Returns (original_text, translated_text, speech_file, timings_dict).
+    Returns (transcript_text, translated_text, speech_file, timings_dict).
+    transcript_text is cleaned and formatted (not raw Whisper output).
     """
     t0 = time.perf_counter()
 
     audio, sr = _preprocess(audio, sr)
 
-    if len(audio) < 1600:          # < 100 ms  – ignore
+    if len(audio) < 1600:
         return "", "", None, {}
 
-    # --- VAD: find speech regions ---
     segments = detect_speech(audio, sr)
     if not segments:
         return "", "", None, {}
 
-    # Merge all speech segments for maximum context
     start = segments[0]["start"]
     end   = segments[-1]["end"]
     speech_audio = audio[start:end]
@@ -69,15 +69,20 @@ def run_travel_pipeline(audio: np.ndarray, sr: int, target_lang: str):
 
     # --- ASR ---
     t_asr = time.perf_counter()
-    text, src_lang = transcribe_travel(tmp_path)
+    raw_text, src_lang = transcribe_travel(tmp_path)
     asr_ms = round((time.perf_counter() - t_asr) * 1000, 1)
 
-    if not text.strip():
+    if not raw_text.strip():
         return "", "", None, {}
+
+    # --- Clean + format transcript (same quality as live pipelines) ---
+    text = format_full_text(raw_text)
+    if not text.strip():
+        text = raw_text.strip()   # fallback to raw if formatter strips everything
 
     # --- Translation ---
     t_tr = time.perf_counter()
-    tgt_code = LANGUAGES.get(target_lang, "hin_Deva")
+    tgt_code   = LANGUAGES.get(target_lang, "hin_Deva")
     translated = translate(text, src_lang, tgt_code)
     tr_ms = round((time.perf_counter() - t_tr) * 1000, 1)
 
