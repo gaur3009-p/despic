@@ -1,8 +1,11 @@
+import tempfile
 import time
+import soundfile as sf
 
-from realtime.chunker import VoiceChunker
+from realtime.rolling_buffer import RollingBuffer
 from realtime.parallel_worker import ParallelChunkProcessor
-from services.asr_travel import transcribe_travel
+from services.asr import transcribe                     
+from services.asr_travel import transcribe_travel       
 from services.translator import translate
 from services.transcript_formatter import TranscriptFormatter
 
@@ -25,19 +28,28 @@ LANGUAGES = {
     "Sanskrit":  "san_Deva",
 }
 
-_chunker        = VoiceChunker(silence_trigger_ms=450, min_speech_ms=250, max_chunk_ms=8000)
+_buffer         = RollingBuffer()
 _fmt            = TranscriptFormatter()
 _current_target = "Hindi"
+_partial_text   = ""   # the live in-progress line (not yet committed)
 
 
-def _process_chunk(wav_path: str) -> dict:
-    """Thread-pool worker: ASR + Translation in parallel across chunks."""
+# ── Partial worker (Whisper small, no translation) ────────────────────────────
+
+def _run_partial(wav_path: str) -> dict:
+    text, _ = transcribe(wav_path)
+    return {"text": text.strip(), "type": "partial"}
+
+
+# ── Commit worker (Whisper medium + translation) ──────────────────────────────
+
+def _run_commit(wav_path: str) -> dict:
     t0 = time.perf_counter()
     text, src_lang = transcribe_travel(wav_path)
     asr_ms = round((time.perf_counter() - t0) * 1000, 1)
 
     if not text.strip():
-        return {"text": "", "translated": "", "asr_ms": asr_ms, "tr_ms": 0.0}
+        return {"text": "", "translated": "", "asr_ms": asr_ms, "tr_ms": 0.0, "type": "commit"}
 
     tgt_code   = LANGUAGES.get(_current_target, "hin_Deva")
     t_tr       = time.perf_counter()
@@ -49,18 +61,29 @@ def _process_chunk(wav_path: str) -> dict:
         "translated": translated.strip(),
         "asr_ms":     asr_ms,
         "tr_ms":      tr_ms,
+        "type":       "commit",
     }
 
 
-_processor = ParallelChunkProcessor(process_fn=_process_chunk, max_in_flight=8)
+# Two separate pools — partial needs low latency, commit needs accuracy
+_partial_pool = ParallelChunkProcessor(process_fn=_run_partial, max_in_flight=2)
+_commit_pool  = ParallelChunkProcessor(process_fn=_run_commit,  max_in_flight=8)
 
 
 def reset_live():
-    global _current_target
-    _chunker.reset()
-    _processor.reset()
+    global _partial_text, _current_target
+    _buffer.reset()
     _fmt.reset()
+    _partial_pool.reset()
+    _commit_pool.reset()
+    _partial_text   = ""
     _current_target = "Hindi"
+
+
+def _write_wav(chunk) -> str:
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        sf.write(tmp.name, chunk, 16000)
+        return tmp.name
 
 
 def run_live_pipeline(audio, sr: int, target_lang: str):
@@ -68,49 +91,81 @@ def run_live_pipeline(audio, sr: int, target_lang: str):
     Gradio streaming callback — no TTS.
 
     Returns (transcript_display, translation_display, latency_str).
-    Both text boxes show a clean rolling window of formatted lines.
+
+    Transcript box:
+      - committed lines: clean, normal weight
+      - last line: partial / in-progress, marked with trailing underscore
+
+    Translation box:
+      - mirrors committed lines
+      - shows "…" on the partial line (translation only on commit)
     """
-    global _current_target
+    global _partial_text, _current_target
 
     if audio is None:
-        t, tr = _fmt.display()
-        return t, tr, ""
+        return _build_display()
 
     _current_target = target_lang
     t_frame = time.perf_counter()
 
-    # 1. VAD chunker
-    chunk = _chunker.push(audio, sr)
-    if chunk is not None:
-        _processor.push(chunk, sample_rate=16000)
+    # 1. Feed into dual-stream buffer
+    partial_chunk, commit_chunk = _buffer.push(audio, sr)
 
-    # 2. Collect completed parallel results
-    ready = _processor.drain()
-    if not ready:
-        t, tr = _fmt.display()
-        return t, tr, ""
+    # 2. Submit to respective pools
+    if partial_chunk is not None:
+        _partial_pool.push(partial_chunk, sample_rate=16000)
+    if commit_chunk is not None:
+        _commit_pool.push(commit_chunk, sample_rate=16000)
 
+    # 3. Drain partial results (update the live line, no translation)
+    for _seq, result in _partial_pool.drain():
+        if result.get("text"):
+            _partial_text = result["text"]
+
+    # 4. Drain commit results (add permanent line + translation)
     total_asr = 0.0
     total_tr  = 0.0
-    new_text  = 0
+    committed = 0
 
-    for _seq, result in ready:
+    for _seq, result in _commit_pool.drain():
         if not result.get("text"):
             continue
-        # push() handles all cleaning + line-breaking + translation sync
-        _fmt.push(result["text"], result["translated"])
-        total_asr += result["asr_ms"]
-        total_tr  += result["tr_ms"]
-        new_text  += 1
+        _fmt.push(result["text"], result.get("translated", ""))
+        _partial_text = ""   # clear partial — the committed line replaces it
+        total_asr += result.get("asr_ms", 0)
+        total_tr  += result.get("tr_ms", 0)
+        committed += 1
 
-    transcript_display, translation_display = _fmt.display()
-
-    if new_text == 0:
-        return transcript_display, translation_display, ""
+    transcript_display, translation_display = _build_display()
 
     total_ms = round((time.perf_counter() - t_frame) * 1000, 1)
-    latency  = (
-        f"ASR {total_asr:.0f} ms  |  Translate {total_tr:.0f} ms  |  "
-        f"Total {total_ms} ms  |  pool: {_processor.in_flight} in-flight"
-    )
+    if committed or partial_chunk is not None:
+        latency = (
+            f"ASR {total_asr:.0f} ms  |  Translate {total_tr:.0f} ms  |  "
+            f"Frame {total_ms} ms  |  "
+            f"partial {_partial_pool.in_flight}  commit {_commit_pool.in_flight} in-flight"
+        )
+    else:
+        latency = ""
+
     return transcript_display, translation_display, latency
+
+
+def _build_display():
+    """
+    Assemble what goes in each textbox.
+
+    Transcript: committed lines (normal) + partial line (with trailing _)
+    Translation: mirrored committed translations + ellipsis while partial
+    """
+    t_committed, tr_committed = _fmt.display()
+
+    if _partial_text:
+        # Append the live in-progress line visually
+        transcript_display  = (t_committed  + "\n" + _partial_text + "_").lstrip("\n")
+        translation_display = (tr_committed + "\n" + "…").lstrip("\n")
+    else:
+        transcript_display  = t_committed
+        translation_display = tr_committed
+
+    return transcript_display, translation_display
